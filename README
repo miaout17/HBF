@@ -1,0 +1,11 @@
+HBF: Haskell Brainfuck
+
+* Yet another re-invented useless wheel
+* No optimization, runs slow
+* My first Haskell "application", coding style is poor
+* Try to use monad & monad transformers to implement Interpreter State
+** IO and pure function is isolated
+** Unit tests works on pure functions
+* If you are interested in this garbage, yes, it's released with GPLv3, fell free to edit
+
+-- gaagaaga@tw
