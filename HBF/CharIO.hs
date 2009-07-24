@@ -2,9 +2,7 @@
 module HBF.CharIO (
     CharIO, 
     MockIO, 
-    MockIOData, 
-    makeMockIOData, 
-    getOutput, 
+    runMockIO, 
     putCh, 
     getCh
 ) where
@@ -22,8 +20,8 @@ instance CharIO IO where
     putCh = putChar
     
 data MockIOData = MockIOData {
-    input :: [Char],
-    output :: [Char]
+    moInput :: [Char],
+    moOutput :: [Char]
     }
 
 type MockIO = State MockIOData
@@ -37,12 +35,12 @@ instance CharIO MockIO where
                 return $ Just i
             MockIOData [] _ ->
                 return Nothing
-    putCh c = modify $ \s -> s{output = output s ++ [c]}
+    putCh c = modify $ \s -> s{moOutput = moOutput s ++ [c]}
 
---getOutput :: MockIO () -> [Char]
-getOutput :: MockIO a -> MockIOData -> [Char]
-getOutput s d = 
-    let MockIOData i o = execState s d
-    in  o
-    
 makeMockIOData i = MockIOData i []
+
+runMockIO :: String -> MockIO () -> String
+runMockIO input mockIO =
+    let mockIOData = makeMockIOData input
+        MockIOData i o = execState mockIO mockIOData
+    in  o

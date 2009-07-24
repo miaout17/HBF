@@ -49,8 +49,6 @@ backCode = modify $ \s -> s{ vmCode=(backTP (vmCode s)) }
 terminate :: CharIO m => VMState m ()
 terminate = modify $ \s -> s{ isRunning=False }
 
--- 7 BF commands:
--- inc, dec, fwdMem, backMem, backBlock, inputCh, outputCh
 inc, dec, fwdMem, backMem, inputCh, outputCh :: CharIO m => VMState m ()
 inc = applyMem (+ 1)
 dec = applyMem (\n -> n-1)
@@ -119,5 +117,6 @@ runBF code =
     in do runStateT runVM vmData >> return ()
 
 runMockBF :: String -> String -> String -- code, input => output
-runMockBF code i =  
-    getOutput (runBF code) (makeMockIOData i)
+runMockBF code input =  
+    runMockIO input (runBF code)
+    --getOutput (runBF code) (makeMockIOData i)
