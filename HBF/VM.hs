@@ -1,4 +1,7 @@
-module HBF.VM where
+module HBF.VM (
+    runBF, 
+    runMockBF
+    ) where
 
 import HBF.TapeList
 import HBF.CharIO
@@ -9,14 +12,15 @@ import Data.Char(chr, ord)
 
 data VMData = VMData {
     vmMem :: TapeList Word8, 
-    vmCode :: TapeList Char
+    vmCode :: TapeList Char, 
+    isRunning :: Bool
     } deriving(Show)
 
 newVMData :: [Char] -> VMData
 newVMData code = 
     let m = makeTP $ replicate 65536 0
         c = makeTP code
-    in  VMData m c
+    in  VMData m c True
     
 type VMState = StateT VMData
 
@@ -42,6 +46,9 @@ fwdCode, backCode :: CharIO m => VMState m ()
 fwdCode = modify $ \s -> s{ vmCode=(fwdTP (vmCode s)) }
 backCode = modify $ \s -> s{ vmCode=(backTP (vmCode s)) }
 
+terminate :: CharIO m => VMState m ()
+terminate = modify $ \s -> s{ isRunning=False }
+
 -- 7 BF commands:
 -- inc, dec, fwdMem, backMem, backBlock, inputCh, outputCh
 inc, dec, fwdMem, backMem, inputCh, outputCh :: CharIO m => VMState m ()
@@ -50,31 +57,35 @@ dec = applyMem (\n -> n-1)
 fwdMem = modify $ \s -> s{ vmMem=(fwdTP (vmMem s)) }
 backMem = modify $ \s -> s{ vmMem=(backTP (vmMem s)) }
 outputCh = getMem >>= lift . putCh . word8ToChar
-inputCh = lift getCh >>= setMem . charToWord8
+inputCh = do
+    d <- lift getCh 
+    case d of 
+        Just c -> setMem $ charToWord8 c
+        Nothing -> terminate
 
+blockCount :: Char -> Int
+blockCount '[' = 1
+blockCount ']' = -1
+blockCount _ = 0
+        
 fwdBlock :: CharIO m => Int -> VMState m ()
 fwdBlock n = do
     c <- getCode
     fwdCode
-    n' <- return ( case c of '[' -> n + 1
-                             ']' -> n - 1
-                             _ -> n )
+    n' <- return $ n + blockCount c
     if n'==0 then return () else fwdBlock n'
     
 backBlock :: CharIO m => Int -> VMState m ()
 backBlock n = do
     backCode
     c <- getCode
-    n' <- return ( case c of ']' -> n + 1
-                             '[' -> n - 1
-                             _ -> n )
+    n' <- return $ n - blockCount c
     if n'==0 then return () else backBlock n'
 
 stepVM :: CharIO m => VMState m ()
 stepVM = do
     c <- getCode
     d <- getMem
-    --lift $ putCh c
     fwdCode
     case c of 
         '+' -> inc
@@ -83,33 +94,30 @@ stepVM = do
         '<' -> backMem
         '[' -> if d==0 then fwdBlock 1 else return ()
         ']' -> if d==0 then return () else backBlock 0
-        --']' -> backBlock 0 -- if [ works properly, ] donesn't need checking
-        ',' -> do inputCh
+        ',' -> inputCh 
         '.' -> outputCh
         _ -> return ()
         
-isRunning :: CharIO m => VMState m Bool
-isRunning = gets $ not . endTP . vmCode
+checkTerminate :: CharIO m => VMState m ()
+checkTerminate = do
+    vmData <- get
+    if endTP $ vmCode vmData 
+        then terminate
+        else return ()
 
 runVM :: CharIO m => VMState m ()
 runVM = do
-    r <- isRunning 
+    checkTerminate
+    r <- gets isRunning 
     if not r then return () else do
         stepVM
         runVM
 
-runBF :: String -> IO ()
+runBF :: CharIO m => String -> m ()
 runBF code = 
     let vmData = newVMData code
     in do runStateT runVM vmData >> return ()
 
 runMockBF :: String -> String -> String -- code, input => output
-runMockBF code i =
-    let vmData = newVMData code
-        mockIOData = makeMockIOData i
-        mockIOState = runStateT runVM vmData
-    in  getOutput mockIOState mockIOData
-
-
-hello = runBF ">+++++++++[<++++++++>-]<.>+++++++[<++++>-]<+.+++++++..+++.[-]>++++++++[<++++>-] <.>+++++++++++[<++++++++>-]<-.--------.+++.------.--------.[-]>++++++++[<++++>- ]<+.[-]++++++++++."
-hello' = runMockBF ">+++++++++[<++++++++>-]<.>+++++++[<++++>-]<+.+++++++..+++.[-]>++++++++[<++++>-] <.>+++++++++++[<++++++++>-]<-.--------.+++.------.--------.[-]>++++++++[<++++>- ]<+.[-]++++++++++." ""
+runMockBF code i =  
+    getOutput (runBF code) (makeMockIOData i)
