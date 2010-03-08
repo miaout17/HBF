@@ -1,7 +1,7 @@
 HBF: Haskell Brainfuck
 
 * Yet another re-invented useless wheel
-* No optimization, runs slow
+* No optimization, runs slowly
 * My first Haskell "application", coding style is poor
 * Try to use monad & monad transformers to implement Interpreter State
 ** IO and pure function is isolated
